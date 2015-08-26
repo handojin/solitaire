@@ -28,22 +28,44 @@
    (->> 
     (partition 5))))
 
-(defn- move-joker-A 
-  "step 2a. - move the a joker down one position"
-  [d]
-  (let [location (.indexOf d \A)]
-    (if (= location (- (count d) 1))
-      ;;pathological case - joker at end of deck
-      (do  
-        (let [head (vec (concat (subvec d 0 1) (subvec d location)))
-              tail (subvec d 1 location)]
-          (vec (concat head tail))))
-      ;;normal case - joker somewhere in deck
-      (do
-        (let [head   (subvec d 0 location)
-              body (vec (reverse (subvec d location (+ location 2))))
-              tail  (subvec d (+ location 2))]
-          (vec (concat head body tail)))))))
+(defn- current-index 
+  "util - get the location of the specified joker"
+  [k deck]
+  (.indexOf deck k))
+
+(defn- new-index
+  "util - get the new joker location"
+  [k i deck]
+  (let [c (- (count deck) 1)
+        p (cond 
+            (= k \A) (do (mod (+ i 1) c))
+            (= k \B) (do (mod (+ i 2) c)))]             
+    (if (= p 0) c p)))
+
+(defn- remove-joker 
+  "util - pull the joker from the deck"
+  [i deck]
+  (let [head (subvec deck 0 i)
+        tail (subvec deck (+ i 1))]
+    (vec (concat head tail))))
+
+(defn- replace-joker 
+  "util - replace the joker in the new position"
+  [k n deck]
+  (let [c (- (count deck) 1)
+        head (subvec deck 0 n)
+        tail (subvec deck n)]
+    (vec (concat head [k] tail))))
+
+(defn- move-joker 
+  "step 2a & 2b - general function to move the 'A' and 'B' jokers"
+  [k deck]
+  (let [i (current-index k deck)
+        n (new-index k i deck)
+        deck (remove-joker i deck)
+        deck (replace-joker k n deck)
+        ]
+    deck))
 
 (defn- generate-keystream 
   "step 2. - generate n keystream letters where n = length of message"
