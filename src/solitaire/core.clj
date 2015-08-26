@@ -9,6 +9,11 @@
 
 (def deck (shuffle (concat (range 1 53) '(\A \B))))
 
+;;for testing
+(def deck (vec (concat (range 1 53) '(\A \B))))
+
+(def joker 53)
+
 (defn- generate-char-groups 
   "step 1. - split the message text into five character groups dropping whitespace"
   [text]
@@ -23,7 +28,7 @@
    ;; convert string to a vector of chars
    (vec)
    ;; right pad vector with X chars 
-   (concat (vec (repeat 5 \X)))
+   (concat (vec (repeat 4 \X)))
    ;; partition to yield char groups
    (->> 
     (partition 5))))
@@ -64,7 +69,7 @@
         deck (remove-joker i deck)
         deck (replace-joker k n deck)
         ]
-    deck))
+    (vec deck)))
 
 (defn- triple-cut 
   "step 2c. - triple cut of the deck"
@@ -80,20 +85,57 @@
     (vec (concat tail body head))
 ))
 
+(defn- joker? 
+  "util - is this card a joker?"
+  [card]
+  (or (= card \A) (= card \B)))
+
 (defn- count-cut 
   "step 2d. - count cut of the deck"
   [deck]
   (let [n (last deck)]
-    (if (or (= n \A) (= n \B)) 
+    (if (joker? n)
       deck 
       (do (let [head (subvec deck 0 n)
                 tail (subvec deck n (- (count deck) 1))]
             (vec (concat tail head [n])))))))
 
-(defn- generate-keystream-character
-  "step 2. - generate n keystream letters where n = length of message"
-  [n]
-  
+(defn- output
+  "get the output card and current deck"
+  [deck]
+  (let [card (first deck)]
+    (if (joker? card) 
+      [(nth deck joker) deck]
+      [(nth deck card) deck])))
 
-)
+(defn- solitaire-turn
+  "step 2. -  perform solitaire algorithm to generate a deck"
+  [deck]
+  (->> 
+   deck
+   (move-joker \A)
+   (move-joker \B)
+   (triple-cut)
+   (count-cut)))
 
+(defn- generate-keystream [deck]
+  (let [[k d] (output (solitaire-turn deck))]
+    ;;(println k d)
+    (filter number? 
+            (lazy-seq (cons k (generate-keystream d))))))
+
+(defn- char->int [char-groups]
+  (let [offset 64]
+    (map #(- (int %) offset) (flatten char-groups))))
+
+(defn- int->char [numbers]
+  (let [offset 64]
+    (map #(char (+ (if (= % 0) 26 %) offset)) numbers)))
+
+(defn encrypt [message deck]
+  (let [message (s/upper-case message)
+        message (generate-char-groups message)
+        message (char->int message)
+        n (count message) 
+        message (map #(mod (+ %1 %2) 26) message (take n (generate-keystream deck)))]
+    (partition 5 (int->char message))))
