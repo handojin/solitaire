@@ -80,7 +80,17 @@
     (vec (concat tail body head))
 ))
 
-(defn- generate-keystream 
+(defn- count-cut 
+  "step 2d. - count cut of the deck"
+  [deck]
+  (let [n (last deck)]
+    (if (or (= n \A) (= n \B)) 
+      deck 
+      (do (let [head (subvec deck 0 n)
+                tail (subvec deck n (- (count deck) 1))]
+            (vec (concat tail head [n])))))))
+
+(defn- generate-keystream-character
   "step 2. - generate n keystream letters where n = length of message"
   [n]
   
