@@ -52,8 +52,7 @@
 (defn- replace-joker 
   "util - replace the joker in the new position"
   [k n deck]
-  (let [c (- (count deck) 1)
-        head (subvec deck 0 n)
+  (let [head (subvec deck 0 n)
         tail (subvec deck n)]
     (vec (concat head [k] tail))))
 
@@ -66,6 +65,20 @@
         deck (replace-joker k n deck)
         ]
     deck))
+
+(defn- triple-cut 
+  "step 2c. - triple cut of the deck"
+  [deck]
+  (let [a (current-index \A deck)
+        b (current-index \B deck)
+        head-joker (if (< a b) a b)
+        tail-joker (if (> a b) a b)
+
+        head (subvec deck 0 head-joker)
+        body (subvec deck head-joker (+ 1 tail-joker))
+        tail (subvec deck (+ 1 tail-joker))]
+    (vec (concat tail body head))
+))
 
 (defn- generate-keystream 
   "step 2. - generate n keystream letters where n = length of message"
