@@ -132,10 +132,29 @@
   (let [offset 64]
     (map #(char (+ (if (= % 0) 26 %) offset)) numbers)))
 
+(defn prepare-message [message]
+  (->> message 
+       (s/upper-case)
+       (generate-char-groups)
+       (char->int)))
+
+(defn format-output [message]
+  (->> message
+      (int->char)
+      (partition 5)
+      (map #(apply str %))
+      (s/join " ")))
+
 (defn encrypt [message deck]
+  (let [message (prepare-message)
+        n (count message) 
+        message (map #(mod (+ %1 %2) 26) message (take n (generate-keystream deck)))]
+    (format-output message)))
+
+(defn decrypt [message deck]
   (let [message (s/upper-case message)
         message (generate-char-groups message)
         message (char->int message)
-        n (count message) 
-        message (map #(mod (+ %1 %2) 26) message (take n (generate-keystream deck)))]
-    (partition 5 (int->char message))))
+        n (count message)
+        message (map #(mod (- %1 %2) 26) message (take n (generate-keystream deck)))]
+    (format-output  message)))
