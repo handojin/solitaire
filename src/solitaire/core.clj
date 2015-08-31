@@ -2,38 +2,61 @@
   (:require [clojure.string :as s])
   (:gen-class))
 
+;;maybe use later
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
   (println "Hello, World!"))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;definitions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (def deck (vec (shuffle (concat (range 1 53) '(\A \B)))))
+
+(def joker 53)
 
 ;;for testing
 (def deck (vec (concat (range 1 53) '(\A \B))))
 
-(def joker 53)
 
-(defn- generate-char-groups 
-  "step 1. - split the message into five character groups dropping whitespace"
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;utility functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn- prepare-message 
+  "prepare text for encrypt/decrypt"
   [message]
-  ;; make sure the message exists
-  (assert (> (count message) 0) "you must provide a message to encrypt")
-  
-  (->
-   message
-   (s/upper-case)
-   (s/replace #"\s+" "")                 ;; eliminate whitespace  
-   (concat (repeat 4 \X))))              ;; right pad vector with X chars 
 
+  ;; perform sanity checks
+  (assert (> (count message) 0) "you must provide a message to encrypt")
+  (assert (not (re-matches #"\s+" message)) "message cannot consist solely of whitespace")
+  (assert (re-matches #"[A-Za-z\s]+" message) "message cannot contain non-alpha characters")
+  
+  (let [message (s/replace (s/upper-case message) #"\s+" "")
+        message (concat message (repeat 4 \X))
+        message (flatten (partition 5 message))]
+    (char->int  message)))                           
+
+(defn- char->int 
+  "convert a list of chars to integers"
+  [char-groups]
+  (let [offset 64]
+    (map #(- (int %) offset) char-groups)))
+
+(defn- int->char 
+  "convert a list of integers to characters"
+  [numbers]
+  (let [offset 64]
+    (map #(char (+ (if (= % 0) 26 %) offset)) numbers)))
 
 (defn- current-index 
-  "util - get the location of the specified joker"
+  "get the location of the k specified joker"
   [k deck]
   (.indexOf deck k))
 
 (defn- new-index
-  "util - get the new joker location"
+  "get the new location of the k specified joker"
   [k i deck]
   (let [c (- (count deck) 1)
         p (cond 
@@ -42,31 +65,49 @@
     (if (= p 0) c p)))
 
 (defn- remove-joker 
-  "util - pull the joker from the deck"
+  "pull the joker from the deck"
   [i deck]
   (let [head (subvec deck 0 i)
         tail (subvec deck (+ i 1))]
     (vec (concat head tail))))
 
 (defn- replace-joker 
-  "util - replace the joker in the new position"
+  "replace the joker in the new position"
   [k n deck]
   (let [head (subvec deck 0 n)
         tail (subvec deck n)]
     (vec (concat head [k] tail))))
 
+(defn- joker? 
+  "util - is this card a joker?"
+  [card]
+  (or (= card \A) (= card \B)))
+
+(defn- format-output 
+  "format output to five character groups as tradition dictates"
+  [message]
+  (->> message
+       (int->char)
+       (partition 5)
+       (map #(apply str %))
+       (s/join " ")))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;core solitaire functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defn- move-joker 
-  "step 2a & 2b - general function to move the 'A' and 'B' jokers"
+  "general function to move the 'A' and 'B' jokers appropriately"
   [k deck]
   (let [i (current-index k deck)
         n (new-index k i deck)
         deck (remove-joker i deck)
-        deck (replace-joker k n deck)
-        ]
+        deck (replace-joker k n deck)]
     (vec deck)))
 
 (defn- triple-cut 
-  "step 2c. - triple cut of the deck"
+  "perform a  triple cut of the deck"
   [deck]
   (let [a (current-index \A deck)
         b (current-index \B deck)
@@ -76,16 +117,10 @@
         head (subvec deck 0 head-joker)
         body (subvec deck head-joker (+ 1 tail-joker))
         tail (subvec deck (+ 1 tail-joker))]
-    (vec (concat tail body head))
-))
-
-(defn- joker? 
-  "util - is this card a joker?"
-  [card]
-  (or (= card \A) (= card \B)))
+    (vec (concat tail body head))))
 
 (defn- count-cut 
-  "step 2d. - count cut of the deck"
+  "perform a count cut of the deck"
   [deck]
   (let [n (last deck)]
     (if (joker? n)
@@ -94,16 +129,13 @@
                 tail (subvec deck n (- (count deck) 1))]
             (vec (concat tail head [n])))))))
 
-(defn- output
-  "get the output card and current deck"
-  [deck]
-  (let [card (first deck)]
-    (if (joker? card) 
-      [(nth deck joker) deck]
-      [(nth deck card) deck])))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;solitaire algorithm
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- solitaire-turn
-  "step 2. -  perform solitaire algorithm to generate a deck"
+  "step 2. -  perform a turn of the solitaire algorithm to generate a deck"
   [deck]
   (->> 
    deck
@@ -112,30 +144,24 @@
    (triple-cut)
    (count-cut)))
 
-(defn- generate-keystream [deck]
-  (let [[k d] (output (solitaire-turn deck))]
+(defn- output-key
+  "get the output card and current deck"
+  [deck]
+  (let [card (first deck)]
+    (if (joker? card) 
+      [(nth deck joker) deck]
+      [(nth deck card) deck])))
+
+(defn- generate-keystream 
+  "generate a lazy stream of successive turns of the solitaire alglorithm"
+  [deck]
+  (let [[k d] (output-key (solitaire-turn deck))]
     (filter number? (lazy-seq (cons k (generate-keystream d))))))
 
-(defn- char->int [char-groups]
-  (let [offset 64]
-    (map #(- (int %) offset) (flatten char-groups))))
 
-(defn- int->char [numbers]
-  (let [offset 64]
-    (map #(char (+ (if (= % 0) 26 %) offset)) numbers)))
-
-(defn prepare-message [message]
-  (->> message 
-       (s/upper-case)
-       (generate-char-groups)
-       (char->int)))
-
-(defn format-output [message]
-  (->> message
-      (int->char)
-      (partition 5)
-      (map #(apply str %))
-      (s/join " ")))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;public functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn encrypt 
   "encrypt a message"
@@ -145,7 +171,9 @@
         message (map #(mod (+ %1 %2) 26) message (take n (generate-keystream deck)))]
     (format-output message)))
 
-(defn decrypt [message deck]
+(defn decrypt 
+  "decrypt a message"
+  [message deck]
   (let [message (prepare-message message)
         n (count message)
         message (map #(mod (- %1 %2) 26) message (take n (generate-keystream deck)))]
