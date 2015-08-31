@@ -7,7 +7,7 @@
   [& args]
   (println "Hello, World!"))
 
-(def deck (shuffle (concat (range 1 53) '(\A \B))))
+(def deck (vec (shuffle (concat (range 1 53) '(\A \B)))))
 
 ;;for testing
 (def deck (vec (concat (range 1 53) '(\A \B))))
@@ -15,23 +15,17 @@
 (def joker 53)
 
 (defn- generate-char-groups 
-  "step 1. - split the message text into five character groups dropping whitespace"
-  [text]
+  "step 1. - split the message into five character groups dropping whitespace"
+  [message]
   ;; make sure the message exists
-  (assert (> (count text) 0) "you must provide a message to encrypt")
+  (assert (> (count message) 0) "you must provide a message to encrypt")
   
   (->
-   text
-   ;; eliminate whitespace
-   (s/split #"\s+")
-   (s/join)
-   ;; convert string to a vector of chars
-   (vec)
-   ;; right pad vector with X chars 
-   (concat (vec (repeat 4 \X)))
-   ;; partition to yield char groups
-   (->> 
-    (partition 5))))
+   message
+   (s/upper-case)
+   (s/replace #"\s+" "")                 ;; eliminate whitespace  
+   (concat (repeat 4 \X))))              ;; right pad vector with X chars 
+
 
 (defn- current-index 
   "util - get the location of the specified joker"
@@ -120,9 +114,7 @@
 
 (defn- generate-keystream [deck]
   (let [[k d] (output (solitaire-turn deck))]
-    ;;(println k d)
-    (filter number? 
-            (lazy-seq (cons k (generate-keystream d))))))
+    (filter number? (lazy-seq (cons k (generate-keystream d))))))
 
 (defn- char->int [char-groups]
   (let [offset 64]
@@ -145,16 +137,16 @@
       (map #(apply str %))
       (s/join " ")))
 
-(defn encrypt [message deck]
-  (let [message (prepare-message)
+(defn encrypt 
+  "encrypt a message"
+  [message deck]
+  (let [message (prepare-message message)
         n (count message) 
         message (map #(mod (+ %1 %2) 26) message (take n (generate-keystream deck)))]
     (format-output message)))
 
 (defn decrypt [message deck]
-  (let [message (s/upper-case message)
-        message (generate-char-groups message)
-        message (char->int message)
+  (let [message (prepare-message message)
         n (count message)
         message (map #(mod (- %1 %2) 26) message (take n (generate-keystream deck)))]
     (format-output  message)))
