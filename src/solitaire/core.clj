@@ -2,41 +2,36 @@
   (:require [clojure.string :as s])
   (:gen-class))
 
-;;maybe use later
-(defn -main
-  "I don't do a whole lot ... yet."
-  [& args]
-  (println "Hello, World!"))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; An implementation of Bruce Schneier's Solitaire Encryption algorithm  
+;; 
+;; The algorithm uses a set of operations on deck of cards to generate a set of 
+;; numbers that  are summed with a set of numbers representing a plain text message 
+;; we wish to encrypt. Full description here: 
+;;
+;; https://www.schneier.com/solitaire.html
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
+;;generate a random deck 
 (def deck (vec (shuffle (concat (range 1 53) '(\A \B)))))
 
+;;jokers are treated as having value 53 per the spec
 (def joker 53)
 
-;;for testing
-(def deck (vec (concat (range 1 53) '(\A \B))))
+;;an ordered deck for testing 
+;;(def deck (vec (concat (range 1 53) '(\A \B))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;utility functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- prepare-message 
-  "prepare text for encrypt/decrypt"
-  [message]
 
-  ;; perform sanity checks
-  (assert (> (count message) 0) "you must provide a message to encrypt")
-  (assert (not (re-matches #"\s+" message)) "message cannot consist solely of whitespace")
-  (assert (re-matches #"[A-Za-z\s]+" message) "message cannot contain non-alpha characters")
-  
-  (let [message (s/replace (s/upper-case message) #"\s+" "")
-        message (concat message (repeat 4 \X))
-        message (flatten (partition 5 message))]
-    (char->int  message)))                           
 
 (defn- char->int 
   "convert a list of chars to integers"
@@ -51,12 +46,12 @@
     (map #(char (+ (if (= % 0) 26 %) offset)) numbers)))
 
 (defn- current-index 
-  "get the location of the k specified joker"
+  "get the location of the joker specified by k"
   [k deck]
   (.indexOf deck k))
 
 (defn- new-index
-  "get the new location of the k specified joker"
+  "get the new location of the joker specified by k at current position i"
   [k i deck]
   (let [c (- (count deck) 1)
         p (cond 
@@ -79,7 +74,7 @@
     (vec (concat head [k] tail))))
 
 (defn- joker? 
-  "util - is this card a joker?"
+  "predicate function - is this card a joker?"
   [card]
   (or (= card \A) (= card \B)))
 
@@ -92,10 +87,26 @@
        (map #(apply str %))
        (s/join " ")))
 
+(defn- prepare-message 
+  "prepare text for encrypt/decrypt"
+  [message]
+
+  ;; perform sanity checks
+  (assert (> (count message) 0) "you must provide a message to encrypt")
+  (assert (not (re-matches #"\s+" message)) "message cannot consist solely of whitespace")
+  (assert (re-matches #"[A-Za-z\s]+" message) "message cannot contain non-alpha characters")
+  
+  (let [message (s/replace (s/upper-case message) #"\s+" "")
+        message (concat message (repeat 4 \X))
+        message (flatten (partition 5 message))]
+    (char->int  message)))                           
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;core solitaire functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 (defn- move-joker 
   "general function to move the 'A' and 'B' jokers appropriately"
@@ -132,6 +143,19 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;solitaire algorithm
+;;
+;; this is a four step process:
+;;
+;; 1. move the 'A' joker down one 
+;; 2. move the 'B' joker down two
+;; 3. perform a triple cut of the deck
+;; 4. perform a count cut of the deck
+;;
+;; we then look at the first card and count n cards into the deck where n is 
+;; the value of the first card. the value of the card we land on is the key for
+;; a single turn of the algorithm. we repeat for m turns where m is the length 
+;; of the message we wish to encypt.
+;; 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- solitaire-turn
@@ -177,4 +201,4 @@
   (let [message (prepare-message message)
         n (count message)
         message (map #(mod (- %1 %2) 26) message (take n (generate-keystream deck)))]
-    (format-output  message)))
+    (format-output message)))
